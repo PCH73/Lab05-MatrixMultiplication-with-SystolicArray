@@ -1,0 +1,3461 @@
+module MMSA(
+// input signals
+    clk,
+    rst_n,
+    in_valid,
+	in_valid2,
+    matrix,
+	matrix_size,
+    i_mat_idx,
+    w_mat_idx,
+	
+// output signals
+    out_valid,
+    out_value
+);
+//---------------------------------------------------------------------
+//   INPUT AND OUTPUT DECLARATION
+//---------------------------------------------------------------------
+input        clk, rst_n, in_valid, in_valid2;
+input [15:0] matrix;
+input [1:0]  matrix_size;
+input [3:0]  i_mat_idx, w_mat_idx;
+
+output reg       	     out_valid;
+output reg signed [39:0] out_value;
+//---------------------------------------------------------------------
+//   PARAMETER
+//---------------------------------------------------------------------
+parameter S_IDLE = 3'd0;
+parameter S_IN1  = 3'd1;
+parameter S_IN2  = 3'd2;
+parameter S_CHECK= 3'd3;
+parameter S_CAL  = 3'd4;
+parameter S_OUT  = 3'd5;
+
+integer i;
+//---------------------------------------------------------------------
+//   WIRE AND REG DECLARATION
+//---------------------------------------------------------------------
+reg [2:0] c_state,n_state;
+wire oen;
+reg cen;
+reg [31:0] wen;
+reg signed [15:0]mem_in;
+reg [1:0] size;
+
+reg [15:0] count_size;
+reg [7:0] addr;
+reg [5:0] count_matrix;
+reg [9:0] count_cal;
+reg [7:0] count_out_matrix;
+reg [5:0] count_out;
+reg CAL_finished;
+reg [4:0] x_idx;
+reg [4:0] w_idx;
+
+wire [15:0] mem_out[0:31];
+reg [8:0] mem_w_idx;
+reg [8:0] mem_x_idx;
+reg signed [15:0] reg_x [0:255];
+reg signed [15:0] reg_w [0:255];
+reg signed [39:0] y [0:255];
+reg signed [15:0] matrix2_x [0:1],matrix2_w [0:1];
+reg signed [15:0] matrix4_x [0:3],matrix4_w [0:3];
+reg signed [15:0] matrix8_x [0:7],matrix8_w [0:7];
+reg signed [15:0] matrix16_x [0:15],matrix16_w [0:15];
+//---------------------------------------------------------------------
+//   MEM DECLARATION
+//---------------------------------------------------------------------
+SRAM x0  (.A(addr), .D(mem_in), .Q(mem_out[0]),  .CLK(clk), .CEN(cen), .WEN(wen[0]),  .OEN(oen));
+SRAM x1  (.A(addr), .D(mem_in), .Q(mem_out[1]),  .CLK(clk), .CEN(cen), .WEN(wen[1]),  .OEN(oen));
+SRAM x2  (.A(addr), .D(mem_in), .Q(mem_out[2]),  .CLK(clk), .CEN(cen), .WEN(wen[2]),  .OEN(oen));
+SRAM x3  (.A(addr), .D(mem_in), .Q(mem_out[3]),  .CLK(clk), .CEN(cen), .WEN(wen[3]),  .OEN(oen));
+SRAM x4  (.A(addr), .D(mem_in), .Q(mem_out[4]),  .CLK(clk), .CEN(cen), .WEN(wen[4]),  .OEN(oen));
+SRAM x5  (.A(addr), .D(mem_in), .Q(mem_out[5]),  .CLK(clk), .CEN(cen), .WEN(wen[5]),  .OEN(oen));
+SRAM x6  (.A(addr), .D(mem_in), .Q(mem_out[6]),  .CLK(clk), .CEN(cen), .WEN(wen[6]),  .OEN(oen));
+SRAM x7  (.A(addr), .D(mem_in), .Q(mem_out[7]),  .CLK(clk), .CEN(cen), .WEN(wen[7]),  .OEN(oen));
+SRAM x8  (.A(addr), .D(mem_in), .Q(mem_out[8]),  .CLK(clk), .CEN(cen), .WEN(wen[8]),  .OEN(oen));
+SRAM x9  (.A(addr), .D(mem_in), .Q(mem_out[9]),  .CLK(clk), .CEN(cen), .WEN(wen[9]),  .OEN(oen));
+SRAM x10 (.A(addr), .D(mem_in), .Q(mem_out[10]), .CLK(clk), .CEN(cen), .WEN(wen[10]), .OEN(oen));
+SRAM x11 (.A(addr), .D(mem_in), .Q(mem_out[11]), .CLK(clk), .CEN(cen), .WEN(wen[11]), .OEN(oen));
+SRAM x12 (.A(addr), .D(mem_in), .Q(mem_out[12]), .CLK(clk), .CEN(cen), .WEN(wen[12]), .OEN(oen));
+SRAM x13 (.A(addr), .D(mem_in), .Q(mem_out[13]), .CLK(clk), .CEN(cen), .WEN(wen[13]), .OEN(oen));
+SRAM x14 (.A(addr), .D(mem_in), .Q(mem_out[14]), .CLK(clk), .CEN(cen), .WEN(wen[14]), .OEN(oen));
+SRAM x15 (.A(addr), .D(mem_in), .Q(mem_out[15]), .CLK(clk), .CEN(cen), .WEN(wen[15]), .OEN(oen));
+
+SRAM w0  (.A(addr), .D(mem_in), .Q(mem_out[16]), .CLK(clk), .CEN(cen), .WEN(wen[16]), .OEN(oen));
+SRAM w1  (.A(addr), .D(mem_in), .Q(mem_out[17]), .CLK(clk), .CEN(cen), .WEN(wen[17]), .OEN(oen));
+SRAM w2  (.A(addr), .D(mem_in), .Q(mem_out[18]), .CLK(clk), .CEN(cen), .WEN(wen[18]), .OEN(oen));
+SRAM w3  (.A(addr), .D(mem_in), .Q(mem_out[19]), .CLK(clk), .CEN(cen), .WEN(wen[19]), .OEN(oen));
+SRAM w4  (.A(addr), .D(mem_in), .Q(mem_out[20]), .CLK(clk), .CEN(cen), .WEN(wen[20]), .OEN(oen));
+SRAM w5  (.A(addr), .D(mem_in), .Q(mem_out[21]), .CLK(clk), .CEN(cen), .WEN(wen[21]), .OEN(oen));
+SRAM w6  (.A(addr), .D(mem_in), .Q(mem_out[22]), .CLK(clk), .CEN(cen), .WEN(wen[22]), .OEN(oen));
+SRAM w7  (.A(addr), .D(mem_in), .Q(mem_out[23]), .CLK(clk), .CEN(cen), .WEN(wen[23]), .OEN(oen));
+SRAM w8  (.A(addr), .D(mem_in), .Q(mem_out[24]), .CLK(clk), .CEN(cen), .WEN(wen[24]), .OEN(oen));
+SRAM w9  (.A(addr), .D(mem_in), .Q(mem_out[25]), .CLK(clk), .CEN(cen), .WEN(wen[25]), .OEN(oen));
+SRAM w10 (.A(addr), .D(mem_in), .Q(mem_out[26]), .CLK(clk), .CEN(cen), .WEN(wen[26]), .OEN(oen));
+SRAM w11 (.A(addr), .D(mem_in), .Q(mem_out[27]), .CLK(clk), .CEN(cen), .WEN(wen[27]), .OEN(oen));
+SRAM w12 (.A(addr), .D(mem_in), .Q(mem_out[28]), .CLK(clk), .CEN(cen), .WEN(wen[28]), .OEN(oen));
+SRAM w13 (.A(addr), .D(mem_in), .Q(mem_out[29]), .CLK(clk), .CEN(cen), .WEN(wen[29]), .OEN(oen));
+SRAM w14 (.A(addr), .D(mem_in), .Q(mem_out[30]), .CLK(clk), .CEN(cen), .WEN(wen[30]), .OEN(oen));
+SRAM w15 (.A(addr), .D(mem_in), .Q(mem_out[31]), .CLK(clk), .CEN(cen), .WEN(wen[31]), .OEN(oen));
+
+//---------------------------------------------------------------------
+//   FSM
+//---------------------------------------------------------------------
+always@(posedge clk or negedge rst_n)
+begin
+    if(!rst_n) c_state<=S_IDLE;
+    else c_state<=n_state;
+end
+
+always@(*)
+begin
+    case(c_state)
+    S_IDLE:begin
+        if(in_valid) n_state = S_IN1;
+        else n_state = S_IDLE;
+        end
+    S_IN1:begin
+        if(count_matrix < 32) n_state = S_IN1;
+        else n_state = S_CHECK;
+    end
+    S_IN2:begin
+        if(in_valid2) n_state = S_IN2;
+        else n_state = S_CAL;
+    end
+    S_CHECK:begin
+        if(in_valid2) n_state = S_IN2;
+        else n_state =S_CHECK;
+    end
+    S_CAL:begin
+        if(CAL_finished) n_state = S_OUT;
+        else n_state = S_CAL;
+    end
+    S_OUT:begin
+        if(count_out_matrix < 16) 
+        begin
+            case(size)
+            2'b00:begin
+                if(count_out<6'd3) n_state = S_OUT;
+                else n_state = S_CHECK;
+            end
+            2'b01:begin
+                if(count_out<6'd7) n_state = S_OUT;
+                else n_state = S_CHECK;
+            end
+            2'b10:begin
+                if(count_out<6'd15) n_state = S_OUT;
+                else n_state = S_CHECK;
+            end
+            2'b11:begin
+                if(count_out<6'd31) n_state = S_OUT;
+                else n_state = S_CHECK;
+            end
+            endcase
+        end
+        else n_state = S_IDLE;
+    end
+    default:n_state = S_IDLE;
+    endcase
+end
+
+//---------------------------------------------------------------------
+//   Count
+//---------------------------------------------------------------------
+always@(posedge clk or negedge rst_n)
+begin
+    if(!rst_n) count_matrix<=0;
+    else 
+    begin
+        case(n_state)
+        S_IDLE:count_matrix<=0;
+        S_IN1:begin
+                case(size)
+                2'b00:if(addr==9'd2) count_matrix<=count_matrix+1;
+                2'b01:if(addr==9'd14) count_matrix<=count_matrix+1;
+                2'b10:if(addr==9'd62) count_matrix<=count_matrix+1;
+                2'b11:if(addr==9'd254) count_matrix<=count_matrix+1;
+                default : count_matrix<=count_matrix;
+                endcase
+              end
+        endcase
+    end
+end
+
+always@(posedge clk or negedge rst_n)
+begin
+    if(!rst_n) count_size<=0;
+    else if(n_state==S_IDLE) count_size<=0;
+    else count_size<=count_size+1;
+end
+
+always@(posedge clk or negedge rst_n)
+begin
+    if(!rst_n) count_cal<=0;
+    else
+    begin
+        case(n_state)
+        S_IDLE:count_cal<=0;
+        S_CHECK:count_cal<=0;
+        S_CAL:count_cal<=count_cal+1;
+        S_OUT:count_cal<=0;
+        default:count_cal<=count_cal;
+        endcase
+    end
+end
+
+always@(posedge clk or negedge rst_n)
+begin
+    if(!rst_n) CAL_finished<=0;
+    else
+    begin
+        case(n_state)
+        S_IDLE:CAL_finished<=0;
+        S_IN2:CAL_finished<=0;
+        S_CAL:
+        begin
+            case(size)
+            2'b00:if(count_cal==9) CAL_finished<=1;
+            2'b01:if(count_cal==34) CAL_finished<=1;
+            2'b10:if(count_cal==129) CAL_finished<=1;
+            2'b11:if(count_cal==513) CAL_finished<=1;
+            default:CAL_finished <=CAL_finished;
+            endcase
+        end
+        default:CAL_finished <=CAL_finished;
+        endcase
+    end
+end
+
+always@(posedge clk or negedge rst_n)
+begin
+    if(!rst_n) count_out_matrix<=0;
+    else 
+    begin
+        case(n_state)
+        S_IDLE:count_out_matrix<=0;
+        S_OUT:
+        begin
+            case(size)
+            2'b00:if(count_out==2) count_out_matrix<=count_out_matrix+1;
+            2'b01:if(count_out==6) count_out_matrix<=count_out_matrix+1;
+            2'b10:if(count_out==14) count_out_matrix<=count_out_matrix+1;
+            2'b11:if(count_out==30) count_out_matrix<=count_out_matrix+1; 
+            default:count_out_matrix<=count_out_matrix;
+            endcase
+        end
+        default:count_out_matrix<=count_out_matrix;
+        endcase
+    end
+end
+
+always@(posedge clk or negedge rst_n)
+begin
+    if(!rst_n) count_out<=0;
+    else
+    begin
+        case(n_state)
+        S_IDLE:count_out<=0;
+        S_CHECK:count_out<=0;
+        S_OUT:count_out<=count_out+1;
+        default:count_out<=count_out;
+        endcase
+    end 
+end
+
+//---------------------------------------------------------------------
+//   Memory Control
+//---------------------------------------------------------------------
+assign oen=0;
+always@(posedge clk or negedge rst_n)
+begin
+    if(!rst_n) for(i=0;i<32;i=i+1) wen[i]<=1;
+    else 
+    begin
+        case(n_state)
+        S_IDLE:for(i=0;i<32;i=i+1) wen[i]<=1;
+        S_IN1:begin
+                case(count_matrix)//////////////////////////////////////////////////////////////////////////////////////
+                6'd0:wen<={{31{1'b1}},1'b0};
+                6'd1:wen<={{30{1'b1}},1'b0,{1{1'b1}}};
+                6'd2:wen<={{29{1'b1}},1'b0,{2{1'b1}}};
+                6'd3:wen<={{28{1'b1}},1'b0,{3{1'b1}}};
+                6'd4:wen<={{27{1'b1}},1'b0,{4{1'b1}}};
+                6'd5:wen<={{26{1'b1}},1'b0,{5{1'b1}}};
+                6'd6:wen<={{25{1'b1}},1'b0,{6{1'b1}}};
+                6'd7:wen<={{24{1'b1}},1'b0,{7{1'b1}}};
+                6'd8:wen<={{23{1'b1}},1'b0,{8{1'b1}}};
+                6'd9:wen<={{22{1'b1}},1'b0,{9{1'b1}}};
+                6'd10:wen<={{21{1'b1}},1'b0,{10{1'b1}}};
+                6'd11:wen<={{20{1'b1}},1'b0,{11{1'b1}}};
+                6'd12:wen<={{19{1'b1}},1'b0,{12{1'b1}}};
+                6'd13:wen<={{18{1'b1}},1'b0,{13{1'b1}}};
+                6'd14:wen<={{17{1'b1}},1'b0,{14{1'b1}}};
+                6'd15:wen<={{16{1'b1}},1'b0,{15{1'b1}}};
+                6'd16:wen<={{15{1'b1}},1'b0,{16{1'b1}}};
+                6'd17:wen<={{14{1'b1}},1'b0,{17{1'b1}}};
+                6'd18:wen<={{13{1'b1}},1'b0,{18{1'b1}}};
+                6'd19:wen<={{12{1'b1}},1'b0,{19{1'b1}}};
+                6'd20:wen<={{11{1'b1}},1'b0,{20{1'b1}}};
+                6'd21:wen<={{10{1'b1}},1'b0,{21{1'b1}}};
+                6'd22:wen<={{9{1'b1}},1'b0,{22{1'b1}}};
+                6'd23:wen<={{8{1'b1}},1'b0,{23{1'b1}}};
+                6'd24:wen<={{7{1'b1}},1'b0,{24{1'b1}}};
+                6'd25:wen<={{6{1'b1}},1'b0,{25{1'b1}}};
+                6'd26:wen<={{5{1'b1}},1'b0,{26{1'b1}}};
+                6'd27:wen<={{4{1'b1}},1'b0,{27{1'b1}}};
+                6'd28:wen<={{3{1'b1}},1'b0,{28{1'b1}}};
+                6'd29:wen<={{2{1'b1}},1'b0,{29{1'b1}}};
+                6'd30:wen<={1'b1,1'b0,{30{1'b1}}};
+                6'd31:wen<={1'b0,{31{1'b1}}};
+                default:wen<=wen;
+                endcase
+            end
+        S_CHECK:for(i=0;i<32;i=i+1) wen[i]<=1;
+        default:wen<=wen;
+        endcase
+    end    
+end
+
+always@(posedge clk or negedge rst_n)
+begin
+    if(!rst_n) cen<=1;
+    else
+    begin
+        case(n_state)
+        S_IDLE:cen<=1;
+        S_IN1:cen<=0;
+        S_IN2:cen<=0;
+        S_CAL:cen<=0;
+        default:cen<=cen;
+        endcase
+    end
+end
+
+//---------------------------------------------------------------------
+//   Reg Memory In
+//---------------------------------------------------------------------
+always@(posedge clk or negedge rst_n)
+begin
+    if(!rst_n) mem_in<=0;
+    else
+    begin
+        case(n_state)
+        S_IDLE:mem_in<=0;
+        S_IN1:if(in_valid) mem_in<=matrix;
+        S_CAL:mem_in<=0;
+        default:mem_in<=mem_in;
+        endcase
+    end
+end
+
+always@(posedge clk or negedge rst_n)
+begin
+    if(!rst_n) x_idx<=0;
+    else
+    begin
+        case(n_state)
+        S_IDLE:x_idx<=0;
+        S_IN2:if(in_valid2) x_idx<=i_mat_idx;
+        default:x_idx<=x_idx;
+        endcase
+    end
+end
+
+always@(posedge clk or negedge rst_n)
+begin
+    if(!rst_n) w_idx<=4'd0;
+    else
+    begin
+        case(n_state)
+        S_IDLE:w_idx<=0;
+        S_IN2:if(in_valid2) w_idx<=w_mat_idx;
+        default:w_idx<=w_idx;
+        endcase
+    end
+end
+
+//---------------------------------------------------------------------
+//   Reg Memory Out
+//---------------------------------------------------------------------
+always@(posedge clk or negedge rst_n)
+begin
+    if(!rst_n) for(i=0;i<256;i=i+1) reg_x[i]<=16'd0;
+    else begin
+         case (n_state)
+         S_IDLE:for(i=0;i<256;i=i+1) reg_x[i]<=0;
+         S_CHECK:for(i=0;i<256;i=i+1) reg_x[i]<=0;
+         S_CAL:reg_x[mem_w_idx]<=mem_out[x_idx];
+         //default:reg_x[i]<=reg_x[i];
+         endcase
+    end
+end
+
+always@(posedge clk or negedge rst_n)
+begin
+    if(!rst_n) for(i=0;i<256;i=i+1) reg_w[i]<=0;
+    else begin
+         case (n_state)
+         S_IDLE:for(i=0;i<256;i=i+1) reg_w[i]<=0;
+         S_CHECK:for(i=0;i<256;i=i+1) reg_w[i]<=0;
+         S_CAL:reg_w[mem_w_idx]<=mem_out[w_idx + 16];
+         //default:reg_w[i]<=reg_w[i];
+         endcase
+    end
+end
+
+//---------------------------------------------------------------------
+//   DESIGN
+//---------------------------------------------------------------------    
+always@(posedge clk or negedge rst_n)
+begin
+    if(!rst_n)  size<=0;
+    else if(count_size==0) 
+    begin 
+        case(matrix_size)
+        2'b00:size<=2'b00;
+        2'b01:size<=2'b01;
+        2'b10:size<=2'b10;
+        2'b11:size<=2'b11;
+        default:size<=size;
+        endcase
+    end
+    else size<=size;
+end
+
+always@(posedge clk or negedge rst_n)
+begin
+    if(!rst_n) mem_x_idx<=0;
+    else 
+    begin 
+         case(n_state)
+         S_IDLE:mem_x_idx<=0;
+         S_CAL:mem_x_idx<=addr;
+         default:mem_x_idx<=mem_x_idx;
+         endcase
+    end
+end
+
+always@(posedge clk or negedge rst_n)
+begin
+    if(!rst_n) mem_w_idx<=0;
+    else 
+    begin 
+         case(n_state)
+         S_IDLE:mem_w_idx<=0;
+         S_CAL:mem_w_idx<=addr;
+         default:mem_w_idx<=mem_w_idx;
+         endcase
+    end
+end
+
+always@(posedge clk or negedge rst_n)
+begin
+    if(!rst_n) addr<=0;
+    else if(n_state==S_IDLE) addr<=0;
+    else if(n_state==S_CHECK) addr<=0;
+    else if(c_state==S_IN1)
+    begin
+        if(count_matrix < 32)
+        begin
+            case(size)
+            2'b00:begin
+                if(addr>2) addr<=0;
+                else addr<=addr+1;
+            end
+            2'b01:begin
+                if(addr>14) addr<=0;
+                else addr<=addr+1;
+            end
+            2'b10:begin
+                if(addr>62) addr<=0;
+                else addr<=addr+1;
+            end
+           2'b11:begin
+                if(addr>254) addr<=0;
+                else addr<=addr+1;
+            end
+            default:addr<=addr;
+            endcase
+        end
+        else addr<=0;
+    end
+    else if(n_state==S_CAL)
+    begin
+        case(size)
+        2'b00:begin
+            if(addr>2) addr<=0;
+            else addr<=addr+1;
+        end
+        2'b01:begin
+            if(addr>14) addr<=0;
+            else addr<=addr+1;
+        end
+        2'b10:begin
+            if(addr>62) addr<=0;
+            else addr<=addr+1;
+        end
+        2'b11:begin
+            if(addr>254) addr<=0;
+            else addr<=addr+1;
+        end
+        default:addr<=addr;
+        endcase
+    end
+    else  addr<= addr;
+end
+
+//---------------------------------------------------------------------
+//   Output
+//---------------------------------------------------------------------    
+always@(posedge clk or negedge rst_n)
+begin
+    if(!rst_n) out_valid<=0;
+    else
+    begin
+        case(n_state)
+        S_IDLE:out_valid<=0;
+        S_CHECK:out_valid<=0;
+        S_CAL:out_valid<=0;
+        S_OUT:out_valid<=1;
+        default:out_valid <=out_valid;
+        endcase
+    end
+end
+
+always@(posedge clk or negedge rst_n)
+begin
+    if(!rst_n) for(i=0;i<256;i=i+1) y[i]<=0;
+    else
+    begin
+        case(n_state)
+        S_IDLE:for(i=0;i<256;i=i+1) y[i]<=0;
+        S_CAL:
+        begin
+            case(size)
+            2'b00:begin
+                for( i=0;i<4;i=i+1)
+                begin
+                    if(count_cal==6+i) y[i]<=matrix2_x[0]*matrix2_w[0]+matrix2_x[1]*matrix2_w[1];
+                end
+            end
+            2'b01:begin
+                for( i=0;i<16;i=i+1)
+                begin
+                    if(count_cal==18+i) y[i]<=matrix4_x[0]*matrix4_w[0]+matrix4_x[1]*matrix4_w[1]+matrix4_x[2]*matrix4_w[2]+matrix4_x[3]*matrix4_w[3];
+                end
+            end
+            2'b10:begin
+                for( i=0;i<64;i=i+1)
+                begin
+                    if(count_cal==66+i) y[i]<=matrix8_x[0]*matrix8_w[0]+matrix8_x[1]*matrix8_w[1]+matrix8_x[2]*matrix8_w[2]+matrix8_x[3]*matrix8_w[3]+matrix8_x[4]*matrix8_w[4]+matrix8_x[5]*matrix8_w[5]+matrix8_x[6]*matrix8_w[6]+matrix8_x[7]*matrix8_w[7];
+                end
+            end
+            2'b11:begin
+                for( i=0;i<256;i=i+1)
+                begin
+                    if(count_cal==258+i) y[i]<=matrix16_x[0]*matrix16_w[0]+matrix16_x[1]*matrix16_w[1]+matrix16_x[2]*matrix16_w[2]+matrix16_x[3]*matrix16_w[3]+matrix16_x[4]*matrix16_w[4]+matrix16_x[5]*matrix16_w[5]+matrix16_x[6]*matrix16_w[6]+matrix16_x[7]*matrix16_w[7]+matrix16_x[8]*matrix16_w[8]+matrix16_x[9]*matrix16_w[9]+matrix16_x[10]*matrix16_w[10]+matrix16_x[11]*matrix16_w[11]+matrix16_x[12]*matrix16_w[12]+matrix16_x[13]*matrix16_w[13]+matrix16_x[14]*matrix16_w[14]+matrix16_x[15]*matrix16_w[15];
+                end
+            end
+            endcase
+        end
+        endcase
+    end
+end
+
+always@(posedge clk or negedge rst_n)
+begin
+    if(!rst_n) out_value <= 0;
+    else
+    begin
+        case(n_state)
+        S_IDLE:out_value<=0;
+        S_CHECK:out_value<=0;
+        S_OUT:begin
+                case(size)
+                2'b00:
+                begin
+                    case(count_out)
+                    0: out_value <= y[0];
+                    1: out_value <= y[1]+y[2];
+                    2: out_value <= y[3];
+                    endcase
+                end
+                2'b01:
+                begin
+                    case(count_out)
+                    0: out_value <= y[0];
+                    1: out_value <= y[1]+y[4];
+                    2: out_value <= y[8]+y[5]+y[2];
+                    3: out_value <= y[12]+y[9]+y[6]+y[3];
+                    4: out_value <= y[13]+y[10]+y[7];
+                    5: out_value <= y[14]+y[11];
+                    6: out_value <= y[15];
+                    endcase
+                end
+                2'b10:
+                begin
+                    case(count_out)
+                    0: out_value <= y[0];
+                    1: out_value <= y[1]+y[8];
+                    2: out_value <= y[16]+y[9]+y[2];
+                    3: out_value <= y[24]+y[17]+y[10]+y[3];
+                    4: out_value <= y[32]+y[25]+y[18]+y[11]+y[4];
+                    5: out_value <= y[40]+y[33]+y[26]+y[19]+y[12]+y[5];
+                    6: out_value <= y[48]+y[41]+y[34]+y[27]+y[20]+y[13]+y[6];
+                    7: out_value <= y[56]+y[49]+y[42]+y[35]+y[28]+y[21]+y[14]+y[7];
+                    8: out_value <= y[57]+y[50]+y[43]+y[36]+y[29]+y[22]+y[15];
+                    9: out_value <= y[58]+y[51]+y[44]+y[37]+y[30]+y[23];
+                    10: out_value <= y[59]+y[52]+y[45]+y[38]+y[31];
+                    11: out_value <= y[60]+y[53]+y[46]+y[39];
+                    12: out_value <= y[61]+y[54]+y[47];
+                    13: out_value <= y[62]+y[55];
+                    14: out_value <= y[63];
+                    endcase
+                end
+                2'b11:
+                begin
+                    case(count_out)
+                    0: out_value <= y[0];
+                    1: out_value <= y[1]+y[16];
+                    2: out_value <= y[32]+y[17]+y[2];
+                    3: out_value <= y[48]+y[33]+y[18]+y[3];
+                    4: out_value <= y[64]+y[49]+y[34]+y[19]+y[4];
+                    5: out_value <= y[80]+y[65]+y[50]+y[35]+y[20]+y[5];
+                    6: out_value <= y[96]+y[81]+y[66]+y[51]+y[36]+y[21]+y[6];
+                    7: out_value <= y[112]+y[97]+y[82]+y[67]+y[52]+y[37]+y[22]+y[7];
+                    8: out_value <= y[128]+y[113]+y[98]+y[83]+y[68]+y[53]+y[38]+y[23]+y[8];
+                    9: out_value <= y[144]+y[129]+y[114]+y[99]+y[84]+y[69]+y[54]+y[39]+y[24]+y[9];
+                    10: out_value <= y[160]+y[145]+y[130]+y[115]+y[100]+y[85]+y[70]+y[55]+y[40]+y[25]+y[10];
+                    11: out_value <= y[176]+y[161]+y[146]+y[131]+y[116]+y[101]+y[86]+y[71]+y[56]+y[41]+y[26]+y[11];
+                    12: out_value <= y[192]+y[177]+y[162]+y[147]+y[132]+y[117]+y[102]+y[87]+y[72]+y[57]+y[42]+y[27]+y[12];
+                    13: out_value <= y[208]+y[193]+y[178]+y[163]+y[148]+y[133]+y[118]+y[103]+y[88]+y[73]+y[58]+y[43]+y[28]+y[13];
+                    14: out_value <= y[224]+y[209]+y[194]+y[179]+y[164]+y[149]+y[134]+y[119]+y[104]+y[89]+y[74]+y[59]+y[44]+y[29]+y[14];
+                    15: out_value <= y[240]+y[225]+y[210]+y[195]+y[180]+y[165]+y[150]+y[135]+y[120]+y[105]+y[90]+y[75]+y[60]+y[45]+y[30]+y[15];
+                    16: out_value <= y[241]+y[226]+y[211]+y[196]+y[181]+y[166]+y[151]+y[136]+y[121]+y[106]+y[91]+y[76]+y[61]+y[46]+y[31];
+                    17: out_value <= y[242]+y[227]+y[212]+y[197]+y[182]+y[167]+y[152]+y[137]+y[122]+y[107]+y[92]+y[77]+y[62]+y[47];
+                    18: out_value <= y[243]+y[228]+y[213]+y[198]+y[183]+y[168]+y[153]+y[138]+y[123]+y[108]+y[93]+y[78]+y[63];
+                    19: out_value <= y[244]+y[229]+y[214]+y[199]+y[184]+y[169]+y[154]+y[139]+y[124]+y[109]+y[94]+y[79];
+                    20: out_value <= y[245]+y[230]+y[215]+y[200]+y[185]+y[170]+y[155]+y[140]+y[125]+y[110]+y[95];
+                    21: out_value <= y[246]+y[231]+y[216]+y[201]+y[186]+y[171]+y[156]+y[141]+y[126]+y[111];
+                    22: out_value <= y[247]+y[232]+y[217]+y[202]+y[187]+y[172]+y[157]+y[142]+y[127];
+                    23: out_value <= y[248]+y[233]+y[218]+y[203]+y[188]+y[173]+y[158]+y[143];
+                    24: out_value <= y[249]+y[234]+y[219]+y[204]+y[189]+y[174]+y[159];
+                    25: out_value <= y[250]+y[235]+y[220]+y[205]+y[190]+y[175];
+                    26: out_value <= y[251]+y[236]+y[221]+y[206]+y[191];
+                    27: out_value <= y[252]+y[237]+y[222]+y[207];
+                    28: out_value <= y[253]+y[238]+y[223];
+                    29: out_value <= y[254]+y[239];
+                    30: out_value <= y[255];
+                    endcase
+                end
+                default:out_value <=out_value;
+                endcase
+            end
+        endcase
+    end
+end
+
+always@(posedge clk or negedge rst_n)
+begin
+    if(!rst_n) 
+    begin
+        for(i=0;i<2;i=i+1)
+        begin
+            matrix2_x[i]<=0;
+            matrix2_w[i]<=0;
+        end
+        for(i=0;i<4;i=i+1)
+        begin
+            matrix4_x[i]<=0;
+            matrix4_w[i]<=0;
+        end
+        for(i=0;i<8;i=i+1)
+        begin
+            matrix8_x[i]<=0;
+            matrix8_w[i]<=0;
+        end
+        for(i=0;i<16;i=i+1)
+        begin
+            matrix16_x[i]<=0;
+            matrix16_w[i]<=0;
+        end
+    end
+    else 
+    begin
+    case(n_state)
+        S_IDLE:
+        begin
+            for(i=0;i<2;i=i+1)
+            begin
+                matrix2_x[i]<=0;
+                matrix2_w[i]<=0;
+            end
+            for(i=0;i<4;i=i+1)
+            begin
+                matrix4_x[i]<=0;
+                matrix4_w[i]<=0;
+            end
+            for(i=0;i<8;i=i+1)
+            begin
+                matrix8_x[i]<=0;
+                matrix8_w[i]<=0;
+            end
+            for(i=0;i<16;i=i+1)
+            begin
+                matrix16_x[i]<=0;
+                matrix16_w[i]<=0;
+            end
+        end
+        S_CAL:
+        begin
+            case(size)
+            2'b00:
+            begin
+                case(count_cal)
+                5:
+                begin
+                        for(i=0;i<2;i=i+1)
+                        begin
+                            matrix2_w[i]<=reg_w[i*2];
+                            matrix2_x[i]<=reg_x[i];
+                        end
+                end
+                6:
+                begin
+                        for(i=0;i<2;i=i+1)
+                        begin
+                            matrix2_w[i]<=reg_w[i*2+1];
+                            matrix2_x[i]<=reg_x[i];
+                        end
+                end
+                7:
+                begin
+                        for(i=0;i<2;i=i+1)
+                        begin
+                            matrix2_w[i]<=reg_w[i*2];
+                            matrix2_x[i]<=reg_x[i+2];
+                        end
+                end
+                8:
+                begin
+                        for(i=0;i<2;i=i+1)
+                        begin
+                            matrix2_w[i]<=reg_w[i*2+1];
+                            matrix2_x[i]<=reg_x[i+2];
+                        end
+                end
+                endcase
+            end
+            2'b01:
+            begin
+                case(count_cal)
+                17:
+                begin
+                    for(i=0;i<4;i=i+1)
+                    begin
+                        matrix4_w[i]<=reg_w[i*4];
+                        matrix4_x[i]<=reg_x[i];
+                    end
+                end
+                18:
+                begin
+                    for(i=0;i<4;i=i+1)
+                    begin
+                        matrix4_w[i]<=reg_w[i*4+1];
+                        matrix4_x[i]<=reg_x[i];
+                    end
+                end
+                19:
+                begin
+                for(i=0;i<4;i=i+1)
+                    begin
+                        matrix4_w[i]<=reg_w[i*4+2];
+                        matrix4_x[i]<=reg_x[i];
+                    end
+                end
+                20:
+                begin
+                for(i=0;i<4;i=i+1)
+                    begin
+                        matrix4_w[i]<=reg_w[i*4+3];
+                        matrix4_x[i]<=reg_x[i];
+                    end
+                end
+                21:
+                begin
+                    for(i=0;i<4;i=i+1)
+                    begin
+                        matrix4_w[i]<=reg_w[i*4];
+                        matrix4_x[i]<=reg_x[i+4];
+                    end
+                end
+                22:
+                begin
+                    for(i=0;i<4;i=i+1)
+                    begin
+                        matrix4_w[i]<=reg_w[i*4+1];
+                        matrix4_x[i]<=reg_x[i+4];
+                    end
+                end
+                23:
+                begin
+                    for(i=0;i<4;i=i+1)
+                    begin
+                        matrix4_w[i]<=reg_w[i*4+2];
+                        matrix4_x[i]<=reg_x[i+4];
+                    end
+                end
+                24:
+                begin
+                    for(i=0;i<4;i=i+1)
+                    begin
+                        matrix4_w[i]<=reg_w[i*4+3];
+                        matrix4_x[i]<=reg_x[i+4];
+                    end
+                end
+                25:
+                begin
+                    for(i=0;i<4;i=i+1)
+                    begin
+                        matrix4_w[i]<=reg_w[i*4];
+                        matrix4_x[i]<=reg_x[i+8];
+                    end
+                end
+                26:
+                begin
+                    for(i=0;i<4;i=i+1)
+                    begin
+                        matrix4_w[i]<=reg_w[i*4+1];
+                        matrix4_x[i]<=reg_x[i+8];
+                    end
+                end
+                27:
+                begin
+                    for(i=0;i<4;i=i+1)
+                    begin
+                        matrix4_w[i]<=reg_w[i*4+2];
+                        matrix4_x[i]<=reg_x[i+8];
+                    end
+                end
+                28:
+                begin
+                    for(i=0;i<4;i=i+1)
+                    begin
+                        matrix4_w[i]<=reg_w[i*4+3];
+                        matrix4_x[i]<=reg_x[i+8];
+                    end
+                end
+                29:
+                begin
+                    for(i=0;i<4;i=i+1)
+                    begin
+                        matrix4_w[i]<=reg_w[i*4];
+                        matrix4_x[i]<=reg_x[i+12];
+                    end
+                end
+                30:
+                begin
+                    for(i=0;i<4;i=i+1)
+                    begin
+                        matrix4_w[i]<=reg_w[i*4+1];
+                        matrix4_x[i]<=reg_x[i+12];
+                    end
+                end
+                31:
+                begin
+                    for(i=0;i<4;i=i+1)
+                    begin
+                        matrix4_w[i]<=reg_w[i*4+2];
+                        matrix4_x[i]<=reg_x[i+12];
+                    end
+                end
+                32:
+                begin
+                    for(i=0;i<4;i=i+1)
+                    begin
+                        matrix4_w[i]<=reg_w[i*4+3];
+                        matrix4_x[i]<=reg_x[i+12];
+                    end
+                end
+                endcase
+            end
+            2'b10:
+            begin
+                case(count_cal)
+                65:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8];
+                        matrix8_x[i]<=reg_x[i];
+                    end
+                end
+                66:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+1];
+                        matrix8_x[i]<=reg_x[i];
+                    end
+                end
+                67:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+2];
+                        matrix8_x[i]<=reg_x[i];
+                    end
+                end
+                68:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+3];
+                        matrix8_x[i]<=reg_x[i];
+                    end
+                end
+                69:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+4];
+                        matrix8_x[i]<=reg_x[i];
+                    end
+                end
+                70:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+5];
+                        matrix8_x[i]<=reg_x[i];
+                    end
+                end
+                71:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+6];
+                        matrix8_x[i]<=reg_x[i];
+                    end
+                end
+                72:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+7];
+                        matrix8_x[i]<=reg_x[i];
+                    end
+                end
+                73:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8];
+                        matrix8_x[i]<=reg_x[i+8];
+                    end
+                end
+                74:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+1];
+                        matrix8_x[i]<=reg_x[i+8];
+                    end
+                end
+                75:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+2];
+                        matrix8_x[i]<=reg_x[i+8];
+                    end
+                end
+                76:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+3];
+                        matrix8_x[i]<=reg_x[i+8];
+                    end
+                end
+                77:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+4];
+                        matrix8_x[i]<=reg_x[i+8];
+                    end
+                end
+                78:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+5];
+                        matrix8_x[i]<=reg_x[i+8];
+                    end
+                end
+                79:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+6];
+                        matrix8_x[i]<=reg_x[i+8];
+                    end
+                end
+                80:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+7];
+                        matrix8_x[i]<=reg_x[i+8];
+                    end
+                end
+                81:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8];
+                        matrix8_x[i]<=reg_x[i+16];
+                    end
+                end
+                82:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+1];
+                        matrix8_x[i]<=reg_x[i+16];
+                    end
+                end
+                83:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+2];
+                        matrix8_x[i]<=reg_x[i+16];
+                    end
+                end
+                84:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+3];
+                        matrix8_x[i]<=reg_x[i+16];
+                    end
+                end
+                85:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+4];
+                        matrix8_x[i]<=reg_x[i+16];
+                    end
+                end
+                86:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+5];
+                        matrix8_x[i]<=reg_x[i+16];
+                    end
+                end
+                87:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+6];
+                        matrix8_x[i]<=reg_x[i+16];
+                    end
+                end
+                88:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+7];
+                        matrix8_x[i]<=reg_x[i+16];
+                    end
+                end
+                89:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8];
+                        matrix8_x[i]<=reg_x[i+24];
+                    end
+                end
+                90:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+1];
+                        matrix8_x[i]<=reg_x[i+24];
+                    end
+                end
+                91:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+2];
+                        matrix8_x[i]<=reg_x[i+24];
+                    end
+                end
+                92:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+3];
+                        matrix8_x[i]<=reg_x[i+24];
+                    end
+                end
+                93:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+4];
+                        matrix8_x[i]<=reg_x[i+24];
+                    end
+                end
+                94:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+5];
+                        matrix8_x[i]<=reg_x[i+24];
+                    end
+                end
+                95:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+6];
+                        matrix8_x[i]<=reg_x[i+24];
+                    end
+                end
+                96:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+7];
+                        matrix8_x[i]<=reg_x[i+24];
+                    end
+                end
+                97:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8];
+                        matrix8_x[i]<=reg_x[i+32];
+                    end
+                end
+                98:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+1];
+                        matrix8_x[i]<=reg_x[i+32];
+                    end
+                end
+                99:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+2];
+                        matrix8_x[i]<=reg_x[i+32];
+                    end
+                end
+                100:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+3];
+                        matrix8_x[i]<=reg_x[i+32];
+                    end
+                end
+                101:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+4];
+                        matrix8_x[i]<=reg_x[i+32];
+                    end
+                end
+                102:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+5];
+                        matrix8_x[i]<=reg_x[i+32];
+                    end
+                end
+                103:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+6];
+                        matrix8_x[i]<=reg_x[i+32];
+                    end
+                end
+                104:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+7];
+                        matrix8_x[i]<=reg_x[i+32];
+                    end
+                end
+                105:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8];
+                        matrix8_x[i]<=reg_x[i+40];
+                    end
+                end
+                106:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+1];
+                        matrix8_x[i]<=reg_x[i+40];
+                    end
+                end
+                107:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+2];
+                        matrix8_x[i]<=reg_x[i+40];
+                    end
+                end
+                108:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+3];
+                        matrix8_x[i]<=reg_x[i+40];
+                    end
+                end
+                109:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+4];
+                        matrix8_x[i]<=reg_x[i+40];
+                    end
+                end
+                110:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+5];
+                        matrix8_x[i]<=reg_x[i+40];
+                    end
+                end
+                111:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+6];
+                        matrix8_x[i]<=reg_x[i+40];
+                    end
+                end
+                112:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+7];
+                        matrix8_x[i]<=reg_x[i+40];
+                    end
+                end
+                113:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8];
+                        matrix8_x[i]<=reg_x[i+48];
+                    end
+                end
+                114:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+1];
+                        matrix8_x[i]<=reg_x[i+48];
+                    end
+                end
+                115:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+2];
+                        matrix8_x[i]<=reg_x[i+48];
+                    end
+                end
+                116:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+3];
+                        matrix8_x[i]<=reg_x[i+48];
+                    end
+                end
+                117:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+4];
+                        matrix8_x[i]<=reg_x[i+48];
+                    end
+                end
+                118:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+5];
+                        matrix8_x[i]<=reg_x[i+48];
+                    end
+                end
+                119:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+6];
+                        matrix8_x[i]<=reg_x[i+48];
+                    end
+                end
+                120:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+7];
+                        matrix8_x[i]<=reg_x[i+48];
+                    end
+                end
+                121:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8];
+                        matrix8_x[i]<=reg_x[i+56];
+                    end
+                end
+                122:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+1];
+                        matrix8_x[i]<=reg_x[i+56];
+                    end
+                end
+                123:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+2];
+                        matrix8_x[i]<=reg_x[i+56];
+                    end
+                end
+                124:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+3];
+                        matrix8_x[i]<=reg_x[i+56];
+                    end
+                end
+                125:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+4];
+                        matrix8_x[i]<=reg_x[i+56];
+                    end
+                end
+                126:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+5];
+                        matrix8_x[i]<=reg_x[i+56];
+                    end
+                end
+                127:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+6];
+                        matrix8_x[i]<=reg_x[i+56];
+                    end
+                end
+                128:
+                begin
+                    for(i=0;i<8;i=i+1)
+                    begin
+                        matrix8_w[i]<=reg_w[i*8+7];
+                        matrix8_x[i]<=reg_x[i+56];
+                    end
+                end
+                endcase
+            end
+            2'b11:
+            begin
+                case(count_cal)
+                257:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16];
+                            matrix16_x[i]<=reg_x[i];
+                        end
+                end
+                258:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+1];
+                            matrix16_x[i]<=reg_x[i];
+                        end
+                end
+                259:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+2];
+                            matrix16_x[i]<=reg_x[i];
+                        end
+                end
+                260:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+3];
+                            matrix16_x[i]<=reg_x[i];
+                        end
+                end
+                261:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+4];
+                            matrix16_x[i]<=reg_x[i];
+                        end
+                end
+                262:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+5];
+                            matrix16_x[i]<=reg_x[i];
+                        end
+                end
+                263:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+6];
+                            matrix16_x[i]<=reg_x[i];
+                        end
+                end
+                264:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+7];
+                            matrix16_x[i]<=reg_x[i];
+                        end
+                end
+                265:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+8];
+                            matrix16_x[i]<=reg_x[i];
+                        end
+                end
+                266:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+9];
+                            matrix16_x[i]<=reg_x[i];
+                        end
+                end
+                267:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+10];
+                            matrix16_x[i]<=reg_x[i];
+                        end
+                end
+                268:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+11];
+                            matrix16_x[i]<=reg_x[i];
+                        end
+                end
+                269:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+12];
+                            matrix16_x[i]<=reg_x[i];
+                        end
+                end
+                270:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+13];
+                            matrix16_x[i]<=reg_x[i];
+                        end
+                end
+                271:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+14];
+                            matrix16_x[i]<=reg_x[i];
+                        end
+                end
+                272:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+15];
+                            matrix16_x[i]<=reg_x[i];
+                        end
+                end
+                273:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16];
+                            matrix16_x[i]<=reg_x[i+16];
+                        end
+                end
+                274:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+1];
+                            matrix16_x[i]<=reg_x[i+16];
+                        end
+                end
+                275:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+2];
+                            matrix16_x[i]<=reg_x[i+16];
+                        end
+                end
+                276:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+3];
+                            matrix16_x[i]<=reg_x[i+16];
+                        end
+                end
+                277:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+4];
+                            matrix16_x[i]<=reg_x[i+16];
+                        end
+                end
+                278:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+5];
+                            matrix16_x[i]<=reg_x[i+16];
+                        end
+                end
+                279:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+6];
+                            matrix16_x[i]<=reg_x[i+16];
+                        end
+                end
+                280:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+7];
+                            matrix16_x[i]<=reg_x[i+16];
+                        end
+                end
+                281:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+8];
+                            matrix16_x[i]<=reg_x[i+16];
+                        end
+                end
+                282:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+9];
+                            matrix16_x[i]<=reg_x[i+16];
+                        end
+                end
+                283:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+10];
+                            matrix16_x[i]<=reg_x[i+16];
+                        end
+                end
+                284:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+11];
+                            matrix16_x[i]<=reg_x[i+16];
+                        end
+                end
+                285:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+12];
+                            matrix16_x[i]<=reg_x[i+16];
+                        end
+                end
+                286:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+13];
+                            matrix16_x[i]<=reg_x[i+16];
+                        end
+                end
+                287:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+14];
+                            matrix16_x[i]<=reg_x[i+16];
+                        end
+                end
+                288:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+15];
+                            matrix16_x[i]<=reg_x[i+16];
+                        end
+                end
+                289:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16];
+                            matrix16_x[i]<=reg_x[i+32];
+                        end
+                end
+                290:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+1];
+                            matrix16_x[i]<=reg_x[i+32];
+                        end
+                end
+                291:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+2];
+                            matrix16_x[i]<=reg_x[i+32];
+                        end
+                end
+                292:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+3];
+                            matrix16_x[i]<=reg_x[i+32];
+                        end
+                end
+                293:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+4];
+                            matrix16_x[i]<=reg_x[i+32];
+                        end
+                end
+                294:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+5];
+                            matrix16_x[i]<=reg_x[i+32];
+                        end
+                end
+                295:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+6];
+                            matrix16_x[i]<=reg_x[i+32];
+                        end
+                end
+                296:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+7];
+                            matrix16_x[i]<=reg_x[i+32];
+                        end
+                end
+                297:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+8];
+                            matrix16_x[i]<=reg_x[i+32];
+                        end
+                end
+                298:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+9];
+                            matrix16_x[i]<=reg_x[i+32];
+                        end
+                end
+                299:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+10];
+                            matrix16_x[i]<=reg_x[i+32];
+                        end
+                end
+                300:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+11];
+                            matrix16_x[i]<=reg_x[i+32];
+                        end
+                end
+                301:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+12];
+                            matrix16_x[i]<=reg_x[i+32];
+                        end
+                end
+                302:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+13];
+                            matrix16_x[i]<=reg_x[i+32];
+                        end
+                end
+                303:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+14];
+                            matrix16_x[i]<=reg_x[i+32];
+                        end
+                end
+                304:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+15];
+                            matrix16_x[i]<=reg_x[i+32];
+                        end
+                end
+                305:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16];
+                            matrix16_x[i]<=reg_x[i+48];
+                        end
+                end
+                306:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+1];
+                            matrix16_x[i]<=reg_x[i+48];
+                        end
+                end
+                307:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+2];
+                            matrix16_x[i]<=reg_x[i+48];
+                        end
+                end
+                308:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+3];
+                            matrix16_x[i]<=reg_x[i+48];
+                        end
+                end
+                309:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+4];
+                            matrix16_x[i]<=reg_x[i+48];
+                        end
+                end
+                310:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+5];
+                            matrix16_x[i]<=reg_x[i+48];
+                        end
+                end
+                311:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+6];
+                            matrix16_x[i]<=reg_x[i+48];
+                        end
+                end
+                312:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+7];
+                            matrix16_x[i]<=reg_x[i+48];
+                        end
+                end
+                313:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+8];
+                            matrix16_x[i]<=reg_x[i+48];
+                        end
+                end
+                314:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+9];
+                            matrix16_x[i]<=reg_x[i+48];
+                        end
+                end
+                315:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+10];
+                            matrix16_x[i]<=reg_x[i+48];
+                        end
+                end
+                316:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+11];
+                            matrix16_x[i]<=reg_x[i+48];
+                        end
+                end
+                317:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+12];
+                            matrix16_x[i]<=reg_x[i+48];
+                        end
+                end
+                318:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+13];
+                            matrix16_x[i]<=reg_x[i+48];
+                        end
+                end
+                319:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+14];
+                            matrix16_x[i]<=reg_x[i+48];
+                        end
+                end
+                320:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+15];
+                            matrix16_x[i]<=reg_x[i+48];
+                        end
+                end
+                321:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16];
+                            matrix16_x[i]<=reg_x[i+64];
+                        end
+                end
+                322:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+1];
+                            matrix16_x[i]<=reg_x[i+64];
+                        end
+                end
+                323:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+2];
+                            matrix16_x[i]<=reg_x[i+64];
+                        end
+                end
+                324:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+3];
+                            matrix16_x[i]<=reg_x[i+64];
+                        end
+                end
+                325:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+4];
+                            matrix16_x[i]<=reg_x[i+64];
+                        end
+                end
+                326:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+5];
+                            matrix16_x[i]<=reg_x[i+64];
+                        end
+                end
+                327:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+6];
+                            matrix16_x[i]<=reg_x[i+64];
+                        end
+                end
+                328:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+7];
+                            matrix16_x[i]<=reg_x[i+64];
+                        end
+                end
+                329:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+8];
+                            matrix16_x[i]<=reg_x[i+64];
+                        end
+                end
+                330:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+9];
+                            matrix16_x[i]<=reg_x[i+64];
+                        end
+                end
+                331:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+10];
+                            matrix16_x[i]<=reg_x[i+64];
+                        end
+                end
+                332:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+11];
+                            matrix16_x[i]<=reg_x[i+64];
+                        end
+                end
+                333:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+12];
+                            matrix16_x[i]<=reg_x[i+64];
+                        end
+                end
+                334:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+13];
+                            matrix16_x[i]<=reg_x[i+64];
+                        end
+                end
+                335:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+14];
+                            matrix16_x[i]<=reg_x[i+64];
+                        end
+                end
+                336:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+15];
+                            matrix16_x[i]<=reg_x[i+64];
+                        end
+                end
+                337:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16];
+                            matrix16_x[i]<=reg_x[i+80];
+                        end
+                end
+                338:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+1];
+                            matrix16_x[i]<=reg_x[i+80];
+                        end
+                end
+                339:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+2];
+                            matrix16_x[i]<=reg_x[i+80];
+                        end
+                end
+                340:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+3];
+                            matrix16_x[i]<=reg_x[i+80];
+                        end
+                end
+                341:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+4];
+                            matrix16_x[i]<=reg_x[i+80];
+                        end
+                end
+                342:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+5];
+                            matrix16_x[i]<=reg_x[i+80];
+                        end
+                end
+                343:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+6];
+                            matrix16_x[i]<=reg_x[i+80];
+                        end
+                end
+                344:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+7];
+                            matrix16_x[i]<=reg_x[i+80];
+                        end
+                end
+                345:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+8];
+                            matrix16_x[i]<=reg_x[i+80];
+                        end
+                end
+                346:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+9];
+                            matrix16_x[i]<=reg_x[i+80];
+                        end
+                end
+                347:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+10];
+                            matrix16_x[i]<=reg_x[i+80];
+                        end
+                end
+                348:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+11];
+                            matrix16_x[i]<=reg_x[i+80];
+                        end
+                end
+                349:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+12];
+                            matrix16_x[i]<=reg_x[i+80];
+                        end
+                end
+                350:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+13];
+                            matrix16_x[i]<=reg_x[i+80];
+                        end
+                end
+                351:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+14];
+                            matrix16_x[i]<=reg_x[i+80];
+                        end
+                end
+                352:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+15];
+                            matrix16_x[i]<=reg_x[i+80];
+                        end
+                end
+                353:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16];
+                            matrix16_x[i]<=reg_x[i+96];
+                        end
+                end
+                354:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+1];
+                            matrix16_x[i]<=reg_x[i+96];
+                        end
+                end
+                355:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+2];
+                            matrix16_x[i]<=reg_x[i+96];
+                        end
+                end
+                356:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+3];
+                            matrix16_x[i]<=reg_x[i+96];
+                        end
+                end
+                357:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+4];
+                            matrix16_x[i]<=reg_x[i+96];
+                        end
+                end
+                358:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+5];
+                            matrix16_x[i]<=reg_x[i+96];
+                        end
+                end
+                359:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+6];
+                            matrix16_x[i]<=reg_x[i+96];
+                        end
+                end
+                360:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+7];
+                            matrix16_x[i]<=reg_x[i+96];
+                        end
+                end
+                361:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+8];
+                            matrix16_x[i]<=reg_x[i+96];
+                        end
+                end
+                362:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+9];
+                            matrix16_x[i]<=reg_x[i+96];
+                        end
+                end
+                363:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+10];
+                            matrix16_x[i]<=reg_x[i+96];
+                        end
+                end
+                364:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+11];
+                            matrix16_x[i]<=reg_x[i+96];
+                        end
+                end
+                365:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+12];
+                            matrix16_x[i]<=reg_x[i+96];
+                        end
+                end
+                366:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+13];
+                            matrix16_x[i]<=reg_x[i+96];
+                        end
+                end
+                367:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+14];
+                            matrix16_x[i]<=reg_x[i+96];
+                        end
+                end
+                368:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+15];
+                            matrix16_x[i]<=reg_x[i+96];
+                        end
+                end
+                369:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16];
+                            matrix16_x[i]<=reg_x[i+112];
+                        end
+                end
+                370:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+1];
+                            matrix16_x[i]<=reg_x[i+112];
+                        end
+                end
+                371:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+2];
+                            matrix16_x[i]<=reg_x[i+112];
+                        end
+                end
+                372:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+3];
+                            matrix16_x[i]<=reg_x[i+112];
+                        end
+                end
+                373:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+4];
+                            matrix16_x[i]<=reg_x[i+112];
+                        end
+                end
+                374:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+5];
+                            matrix16_x[i]<=reg_x[i+112];
+                        end
+                end
+                375:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+6];
+                            matrix16_x[i]<=reg_x[i+112];
+                        end
+                end
+                376:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+7];
+                            matrix16_x[i]<=reg_x[i+112];
+                        end
+                end
+                377:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+8];
+                            matrix16_x[i]<=reg_x[i+112];
+                        end
+                end
+                378:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+9];
+                            matrix16_x[i]<=reg_x[i+112];
+                        end
+                end
+                379:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+10];
+                            matrix16_x[i]<=reg_x[i+112];
+                        end
+                end
+                380:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+11];
+                            matrix16_x[i]<=reg_x[i+112];
+                        end
+                end
+                381:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+12];
+                            matrix16_x[i]<=reg_x[i+112];
+                        end
+                end
+                382:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+13];
+                            matrix16_x[i]<=reg_x[i+112];
+                        end
+                end
+                383:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+14];
+                            matrix16_x[i]<=reg_x[i+112];
+                        end
+                end
+                384:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+15];
+                            matrix16_x[i]<=reg_x[i+112];
+                        end
+                end
+                385:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16];
+                            matrix16_x[i]<=reg_x[i+128];
+                        end
+                end
+                386:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+1];
+                            matrix16_x[i]<=reg_x[i+128];
+                        end
+                end
+                387:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+2];
+                            matrix16_x[i]<=reg_x[i+128];
+                        end
+                end
+                388:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+3];
+                            matrix16_x[i]<=reg_x[i+128];
+                        end
+                end
+                389:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+4];
+                            matrix16_x[i]<=reg_x[i+128];
+                        end
+                end
+                390:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+5];
+                            matrix16_x[i]<=reg_x[i+128];
+                        end
+                end
+                391:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+6];
+                            matrix16_x[i]<=reg_x[i+128];
+                        end
+                end
+                392:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+7];
+                            matrix16_x[i]<=reg_x[i+128];
+                        end
+                end
+                393:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+8];
+                            matrix16_x[i]<=reg_x[i+128];
+                        end
+                end
+                394:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+9];
+                            matrix16_x[i]<=reg_x[i+128];
+                        end
+                end
+                395:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+10];
+                            matrix16_x[i]<=reg_x[i+128];
+                        end
+                end
+                396:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+11];
+                            matrix16_x[i]<=reg_x[i+128];
+                        end
+                end
+                397:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+12];
+                            matrix16_x[i]<=reg_x[i+128];
+                        end
+                end
+                398:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+13];
+                            matrix16_x[i]<=reg_x[i+128];
+                        end
+                end
+                399:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+14];
+                            matrix16_x[i]<=reg_x[i+128];
+                        end
+                end
+                400:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+15];
+                            matrix16_x[i]<=reg_x[i+128];
+                        end
+                end
+                401:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16];
+                            matrix16_x[i]<=reg_x[i+144];
+                        end
+                end
+                402:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+1];
+                            matrix16_x[i]<=reg_x[i+144];
+                        end
+                end
+                403:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+2];
+                            matrix16_x[i]<=reg_x[i+144];
+                        end
+                end
+                404:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+3];
+                            matrix16_x[i]<=reg_x[i+144];
+                        end
+                end
+                405:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+4];
+                            matrix16_x[i]<=reg_x[i+144];
+                        end
+                end
+                406:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+5];
+                            matrix16_x[i]<=reg_x[i+144];
+                        end
+                end
+                407:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+6];
+                            matrix16_x[i]<=reg_x[i+144];
+                        end
+                end
+                408:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+7];
+                            matrix16_x[i]<=reg_x[i+144];
+                        end
+                end
+                409:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+8];
+                            matrix16_x[i]<=reg_x[i+144];
+                        end
+                end
+                410:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+9];
+                            matrix16_x[i]<=reg_x[i+144];
+                        end
+                end
+                411:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+10];
+                            matrix16_x[i]<=reg_x[i+144];
+                        end
+                end
+                412:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+11];
+                            matrix16_x[i]<=reg_x[i+144];
+                        end
+                end
+                413:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+12];
+                            matrix16_x[i]<=reg_x[i+144];
+                        end
+                end
+                414:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+13];
+                            matrix16_x[i]<=reg_x[i+144];
+                        end
+                end
+                415:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+14];
+                            matrix16_x[i]<=reg_x[i+144];
+                        end
+                end
+                416:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+15];
+                            matrix16_x[i]<=reg_x[i+144];
+                        end
+                end
+                417:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16];
+                            matrix16_x[i]<=reg_x[i+160];
+                        end
+                end
+                418:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+1];
+                            matrix16_x[i]<=reg_x[i+160];
+                        end
+                end
+                419:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+2];
+                            matrix16_x[i]<=reg_x[i+160];
+                        end
+                end
+                420:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+3];
+                            matrix16_x[i]<=reg_x[i+160];
+                        end
+                end
+                421:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+4];
+                            matrix16_x[i]<=reg_x[i+160];
+                        end
+                end
+                422:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+5];
+                            matrix16_x[i]<=reg_x[i+160];
+                        end
+                end
+                423:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+6];
+                            matrix16_x[i]<=reg_x[i+160];
+                        end
+                end
+                424:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+7];
+                            matrix16_x[i]<=reg_x[i+160];
+                        end
+                end
+                425:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+8];
+                            matrix16_x[i]<=reg_x[i+160];
+                        end
+                end
+                426:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+9];
+                            matrix16_x[i]<=reg_x[i+160];
+                        end
+                end
+                427:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+10];
+                            matrix16_x[i]<=reg_x[i+160];
+                        end
+                end
+                428:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+11];
+                            matrix16_x[i]<=reg_x[i+160];
+                        end
+                end
+                429:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+12];
+                            matrix16_x[i]<=reg_x[i+160];
+                        end
+                end
+                430:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+13];
+                            matrix16_x[i]<=reg_x[i+160];
+                        end
+                end
+                431:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+14];
+                            matrix16_x[i]<=reg_x[i+160];
+                        end
+                end
+                432:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+15];
+                            matrix16_x[i]<=reg_x[i+160];
+                        end
+                end
+                433:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16];
+                            matrix16_x[i]<=reg_x[i+176];
+                        end
+                end
+                434:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+1];
+                            matrix16_x[i]<=reg_x[i+176];
+                        end
+                end
+                435:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+2];
+                            matrix16_x[i]<=reg_x[i+176];
+                        end
+                end
+                436:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+3];
+                            matrix16_x[i]<=reg_x[i+176];
+                        end
+                end
+                437:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+4];
+                            matrix16_x[i]<=reg_x[i+176];
+                        end
+                end
+                438:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+5];
+                            matrix16_x[i]<=reg_x[i+176];
+                        end
+                end
+                439:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+6];
+                            matrix16_x[i]<=reg_x[i+176];
+                        end
+                end
+                440:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+7];
+                            matrix16_x[i]<=reg_x[i+176];
+                        end
+                end
+                441:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+8];
+                            matrix16_x[i]<=reg_x[i+176];
+                        end
+                end
+                442:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+9];
+                            matrix16_x[i]<=reg_x[i+176];
+                        end
+                end
+                443:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+10];
+                            matrix16_x[i]<=reg_x[i+176];
+                        end
+                end
+                444:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+11];
+                            matrix16_x[i]<=reg_x[i+176];
+                        end
+                end
+                445:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+12];
+                            matrix16_x[i]<=reg_x[i+176];
+                        end
+                end
+                446:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+13];
+                            matrix16_x[i]<=reg_x[i+176];
+                        end
+                end
+                447:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+14];
+                            matrix16_x[i]<=reg_x[i+176];
+                        end
+                end
+                448:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+15];
+                            matrix16_x[i]<=reg_x[i+176];
+                        end
+                end
+                449:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16];
+                            matrix16_x[i]<=reg_x[i+192];
+                        end
+                end
+                450:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+1];
+                            matrix16_x[i]<=reg_x[i+192];
+                        end
+                end
+                451:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+2];
+                            matrix16_x[i]<=reg_x[i+192];
+                        end
+                end
+                452:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+3];
+                            matrix16_x[i]<=reg_x[i+192];
+                        end
+                end
+                453:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+4];
+                            matrix16_x[i]<=reg_x[i+192];
+                        end
+                end
+                454:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+5];
+                            matrix16_x[i]<=reg_x[i+192];
+                        end
+                end
+                455:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+6];
+                            matrix16_x[i]<=reg_x[i+192];
+                        end
+                end
+                456:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+7];
+                            matrix16_x[i]<=reg_x[i+192];
+                        end
+                end
+                457:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+8];
+                            matrix16_x[i]<=reg_x[i+192];
+                        end
+                end
+                458:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+9];
+                            matrix16_x[i]<=reg_x[i+192];
+                        end
+                end
+                459:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+10];
+                            matrix16_x[i]<=reg_x[i+192];
+                        end
+                end
+                460:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+11];
+                            matrix16_x[i]<=reg_x[i+192];
+                        end
+                end
+                461:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+12];
+                            matrix16_x[i]<=reg_x[i+192];
+                        end
+                end
+                462:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+13];
+                            matrix16_x[i]<=reg_x[i+192];
+                        end
+                end
+                463:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+14];
+                            matrix16_x[i]<=reg_x[i+192];
+                        end
+                end
+                464:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+15];
+                            matrix16_x[i]<=reg_x[i+192];
+                        end
+                end
+                465:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16];
+                            matrix16_x[i]<=reg_x[i+208];
+                        end
+                end
+                466:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+1];
+                            matrix16_x[i]<=reg_x[i+208];
+                        end
+                end
+                467:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+2];
+                            matrix16_x[i]<=reg_x[i+208];
+                        end
+                end
+                468:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+3];
+                            matrix16_x[i]<=reg_x[i+208];
+                        end
+                end
+                469:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+4];
+                            matrix16_x[i]<=reg_x[i+208];
+                        end
+                end
+                470:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+5];
+                            matrix16_x[i]<=reg_x[i+208];
+                        end
+                end
+                471:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+6];
+                            matrix16_x[i]<=reg_x[i+208];
+                        end
+                end
+                472:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+7];
+                            matrix16_x[i]<=reg_x[i+208];
+                        end
+                end
+                473:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+8];
+                            matrix16_x[i]<=reg_x[i+208];
+                        end
+                end
+                474:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+9];
+                            matrix16_x[i]<=reg_x[i+208];
+                        end
+                end
+                475:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+10];
+                            matrix16_x[i]<=reg_x[i+208];
+                        end
+                end
+                476:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+11];
+                            matrix16_x[i]<=reg_x[i+208];
+                        end
+                end
+                477:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+12];
+                            matrix16_x[i]<=reg_x[i+208];
+                        end
+                end
+                478:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+13];
+                            matrix16_x[i]<=reg_x[i+208];
+                        end
+                end
+                479:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+14];
+                            matrix16_x[i]<=reg_x[i+208];
+                        end
+                end
+                480:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+15];
+                            matrix16_x[i]<=reg_x[i+208];
+                        end
+                end
+                481:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16];
+                            matrix16_x[i]<=reg_x[i+224];
+                        end
+                end
+                482:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+1];
+                            matrix16_x[i]<=reg_x[i+224];
+                        end
+                end
+                483:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+2];
+                            matrix16_x[i]<=reg_x[i+224];
+                        end
+                end
+                484:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+3];
+                            matrix16_x[i]<=reg_x[i+224];
+                        end
+                end
+                485:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+4];
+                            matrix16_x[i]<=reg_x[i+224];
+                        end
+                end
+                486:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+5];
+                            matrix16_x[i]<=reg_x[i+224];
+                        end
+                end
+                487:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+6];
+                            matrix16_x[i]<=reg_x[i+224];
+                        end
+                end
+                488:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+7];
+                            matrix16_x[i]<=reg_x[i+224];
+                        end
+                end
+                489:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+8];
+                            matrix16_x[i]<=reg_x[i+224];
+                        end
+                end
+                490:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+9];
+                            matrix16_x[i]<=reg_x[i+224];
+                        end
+                end
+                491:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+10];
+                            matrix16_x[i]<=reg_x[i+224];
+                        end
+                end
+                492:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+11];
+                            matrix16_x[i]<=reg_x[i+224];
+                        end
+                end
+                493:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+12];
+                            matrix16_x[i]<=reg_x[i+224];
+                        end
+                end
+                494:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+13];
+                            matrix16_x[i]<=reg_x[i+224];
+                        end
+                end
+                495:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+14];
+                            matrix16_x[i]<=reg_x[i+224];
+                        end
+                end
+                496:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+15];
+                            matrix16_x[i]<=reg_x[i+224];
+                        end
+                end
+                497:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16];
+                            matrix16_x[i]<=reg_x[i+240];
+                        end
+                end
+                498:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+1];
+                            matrix16_x[i]<=reg_x[i+240];
+                        end
+                end
+                499:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+2];
+                            matrix16_x[i]<=reg_x[i+240];
+                        end
+                end
+                500:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+3];
+                            matrix16_x[i]<=reg_x[i+240];
+                        end
+                end
+                501:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+4];
+                            matrix16_x[i]<=reg_x[i+240];
+                        end
+                end
+                502:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+5];
+                            matrix16_x[i]<=reg_x[i+240];
+                        end
+                end
+                503:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+6];
+                            matrix16_x[i]<=reg_x[i+240];
+                        end
+                end
+                504:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+7];
+                            matrix16_x[i]<=reg_x[i+240];
+                        end
+                end
+                505:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+8];
+                            matrix16_x[i]<=reg_x[i+240];
+                        end
+                end
+                506:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+9];
+                            matrix16_x[i]<=reg_x[i+240];
+                        end
+                end
+                507:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+10];
+                            matrix16_x[i]<=reg_x[i+240];
+                        end
+                end
+                508:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+11];
+                            matrix16_x[i]<=reg_x[i+240];
+                        end
+                end
+                509:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+12];
+                            matrix16_x[i]<=reg_x[i+240];
+                        end
+                end
+                510:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+13];
+                            matrix16_x[i]<=reg_x[i+240];
+                        end
+                end
+                511:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+14];
+                            matrix16_x[i]<=reg_x[i+240];
+                        end
+                end
+                512:
+                begin
+                        for(i=0;i<16;i=i+1)
+                        begin
+                            matrix16_w[i]<=reg_w[i*16+15];
+                            matrix16_x[i]<=reg_x[i+240];
+                        end
+                end
+                endcase
+            end
+            endcase
+        end
+        endcase  
+    end
+end
+
+endmodule
